@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 print("Script gestart: Ophalen van de dagelijkse Calvin and Hobbes strip via Regular Expression.")
 
-# URL van de Luann comic pagina
+# URL van de Calvin and Hobbes comic pagina
 CALVINANDHOBBES_URL = 'https://www.gocomics.com/calvinandhobbes'
 
 # Stap 1: Haal de webpagina op
@@ -21,16 +21,16 @@ except requests.exceptions.RequestException as e:
 # Stap 2: Zoek met een regular expression naar de afbeeldings-URL
 print("Zoeken naar de afbeeldings-URL met een regular expression...")
 
-# --- CORRECTIE gebaseerd op uw voorstel ---
-# Het patroon zoekt naar de volledige URL die begint met de basis
-# en gevolgd wordt door een reeks van hexadecimale karakters (a-f, 0-9).
-match = re.search(r'(https://featureassets.gocomics.com/assets/[a-f0-9]+)', response.text)
+# --- CORRECTIE ---
+# Dit patroon zoekt naar het <picture> element met de class 'item-asset-image'
+# en pakt vervolgens de URL uit het <img> element dat daarin staat.
+match = re.search(r'<picture class="item-asset-image">\s*<img src="([^"]+)"', response.text)
 
 if not match:
     print("FOUT: Kon het URL-patroon niet vinden in de broncode van de pagina.")
     exit(1)
 
-# match.group(1) bevat de volledige, schone URL die we hebben gevonden.
+# match.group(1) bevat de URL die we zoeken.
 image_url = match.group(1)
 print(f"SUCCES: Afbeelding URL gevonden via Regular Expression: {image_url}")
 # --- EINDE CORRECTIE ---
@@ -48,10 +48,10 @@ current_date_str = current_date.strftime("%Y-%m-%d")
 
 fe = fg.add_entry()
 fe.id(image_url)
-fe.title(f'Calvin and Hobbes- {current_date_str}')
+fe.title(f'Calvin and Hobbes - {current_date_str}')
 fe.link(href=CALVINANDHOBBES_URL)
 fe.pubDate(current_date)
-fe.description(f'<img src="{image_url}" alt="Calvind and Hobbes Strip voor {current_date_str}" />')
+fe.description(f'<img src="{image_url}" alt="Calvin and Hobbes Strip voor {current_date_str}" />')
 
 # Stap 4: Schrijf het XML-bestand weg
 try:
