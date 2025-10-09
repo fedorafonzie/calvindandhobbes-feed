@@ -22,15 +22,13 @@ options.add_argument('--disable-dev-shm-usage')
 driver = None
 try:
     print("Browser (undetected-chromedriver) wordt gestart...")
-    # AANGEPAST: We gebruiken nu uc.Chrome() in plaats van webdriver.Chrome()
-    driver = uc.Chrome(options=options, version_main=108)
+    # AANGEPAST: We verwijderen 'version_main' zodat de driver automatisch wordt gedownload.
+    driver = uc.Chrome(options=options)
     
-    print(f"Pagina laden: {CALVINANDHOBBES_URL}")
+    print(f"Pagina laden: {CALVINANDHOBLES_URL}")
     driver.get(CALVINANDHOBBES_URL)
 
     try:
-        # We wachten nu simpelweg op de afbeelding, undetected-chromedriver
-        # zou de anti-bot checks moeten doorstaan.
         wait = WebDriverWait(driver, 30)
         image_element = wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'picture.item-asset-image img'))
@@ -40,7 +38,6 @@ try:
 
     except TimeoutException:
         print("FOUT: Timeout bereikt. De afbeelding is niet gevonden.")
-        print("Zelfs met undetected-chromedriver is de anti-bot check mogelijk niet gepasseerd.")
         driver.save_screenshot('debug_screenshot.png')
         print("HTML van de huidige pagina:")
         print(driver.page_source)
