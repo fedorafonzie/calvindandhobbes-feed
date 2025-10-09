@@ -22,10 +22,10 @@ options.add_argument('--disable-dev-shm-usage')
 driver = None
 try:
     print("Browser (undetected-chromedriver) wordt gestart...")
-    # AANGEPAST: We verwijderen 'version_main' zodat de driver automatisch wordt gedownload.
-    driver = uc.Chrome(options=options)
+    # AANGEPAST: We specificeren de Chrome-versie om de mismatch te voorkomen.
+    driver = uc.Chrome(options=options, version_main=140)
     
-    print(f"Pagina laden: {CALVINANDHOBLES_URL}")
+    print(f"Pagina laden: {CALVINANDHOBBES_URL}")
     driver.get(CALVINANDHOBBES_URL)
 
     try:
