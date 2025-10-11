@@ -1,95 +1,69 @@
 import requests
-import json
-from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from datetime import datetime, timezone
 
-print("Script gestart: Ophalen van de dagelijkse Calvin & Hobbes strip.")
+print("Script gestart: Ophalen van Calvin and Hobbes strip via de GoComics JSON API.")
 
-# URL van de Calvin and Hobbes comic pagina
-CALVINANDHOBBES_URL = 'https://www.gocomics.com/calvinandhobbes'
+# --- Stap 1: Haal de stripinformatie op via de verborgen API ---
 
-# Stap 1: Haal de webpagina op
-try:
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-    }
-    response = requests.get(CALVINANDHOBBES_URL, headers=headers)
-    response.raise_for_status()
-    print("SUCCES: GoComics pagina HTML opgehaald.")
-except requests.exceptions.RequestException as e:
-    print(f"FOUT: Kon GoComics pagina niet ophalen. Fout: {e}")
-    exit(1)
-
-# --- DEFINITIEVE METHODE V3: Filteren van 'favorieten' ---
-print("Zoeken naar de correcte JSON-LD script tag en filteren van favorieten...")
-
+# Dit is de URL naar de JSON-data voor de strip van vandaag.
+API_URL = "https://www.gocomics.com/calvinandhobbes.json"
 image_url = None
+
 try:
-    soup = BeautifulSoup(response.text, 'lxml')
-
-    # Vind ALLE script tags van het type 'application/ld+json'
-    all_json_ld_scripts = soup.find_all('script', type='application/ld+json')
-
-    if not all_json_ld_scripts:
-        raise ValueError("Geen 'application/ld+json' script tags gevonden op de pagina.")
-
-    for script in all_json_ld_scripts:
-        if script.string:
-            try:
-                data = json.loads(script.string)
-
-                # Controleer of dit een valide 'ImageObject' is dat de pagina representeert
-                if (isinstance(data, dict) and
-                        data.get('@type') == 'ImageObject' and
-                        data.get('representativeOfPage') is True and
-                        'url' in data):
-                    
-                    # --- DE CRUCIALE EXTRA CONTROLE ---
-                    # Zoek "omhoog" vanaf het script om te zien of het in de 'FiveFavorites' sectie zit.
-                    if script.find_parent('section', class_='ShowFiveFavorites_showFiveFavorites__zsqHu'):
-                        # Ja, dit is een favoriet. Negeer deze en ga door naar de volgende in de loop.
-                        print(f"INFO: 'Favoriet' afbeelding genegeerd: ...{data['url'][-20:]}")
-                        continue
-                    
-                    # Als de code hier komt, is het GEEN favoriet. Dit is de hoofdafbeelding.
-                    image_url = data['url']
-                    print(f"SUCCES: Hoofdafbeelding gevonden: {image_url}")
-                    break  # Stop de loop, we zijn klaar.
-
-            except (json.JSONDecodeError, AttributeError):
-                continue
+    print(f"API aanroepen: {API_URL}")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+    }
+    response = requests.get(API_URL, headers=headers)
+    response.raise_for_status()  # Stopt als er een HTTP-fout is
     
+    # Converteer de response naar JSON-formaat
+    data = response.json()
+    
+    # Haal de URL van de stripafbeelding uit de data.
+    # Het pad is: ['data']['comics'][0]['image_urls']['large_image_url']
+    image_url = data['data']['comics'][0]['image_urls']['large_image_url']
+
     if not image_url:
-        raise ValueError("Kon de hoofdafbeelding niet isoleren van de favorieten.")
+        print("FOUT: Kon de afbeeldings-URL niet vinden in de API-response.")
+        print("Volledige response:", response.text)
+        exit(1)
 
-except (ValueError, KeyError, TypeError) as e:
-    print(f"FOUT: Kon de URL niet uit de data halen. Het script is mogelijk verouderd.")
-    print(f"Foutdetails: {e}")
-    with open("debug_gocomics.html", "w", encoding="utf-8") as f:
-        f.write(response.text)
-    print("De ontvangen HTML is opgeslagen in 'debug_gocomics.html' voor analyse.")
+    print(f"SUCCES: Afbeelding URL gevonden: {image_url}")
+
+except requests.exceptions.RequestException as e:
+    print(f"FOUT: Kon de GoComics API niet bereiken. Fout: {e}")
     exit(1)
-# --- EINDE DEFINITIEVE METHODE ---
-    
-# De rest van het script blijft ongewijzigd
-# ... (Stap 3 & 4) ...
+except (KeyError, IndexError) as e:
+    print(f"FOUT: De structuur van de API-data is onverwacht. Fout: {e}")
+    exit(1)
+
+
+# --- Stap 2: Bouw de RSS-feed ---
+
+COMIC_PAGE_URL = "https://www.gocomics.com/calvinandhobbes"
+
 fg = FeedGenerator()
-fg.id(CALVINANDHOBBES_URL)
-fg.title('Calvin and Hobbes Comic Strip')
-fg.link(href=CALVINANDHOBBES_URL, rel='alternate')
+fg.id(COMIC_PAGE_URL)
+fg.title('Calvin and Hobbes Strip')
+fg.link(href=COMIC_PAGE_URL, rel='alternate')
 fg.description('De dagelijkse Calvin and Hobbes strip.')
 fg.language('en')
 
-current_date = datetime.now(timezone.utc)
-current_date_str = current_date.strftime("%Y-%m-%d")
+nu = datetime.now(timezone.utc)
+datum_titel = nu.strftime("%Y-%m-%d")
+comic_link = f"{COMIC_PAGE_URL}/{nu.strftime('%Y/%m/%d')}"
 
 fe = fg.add_entry()
 fe.id(image_url)
-fe.title(f'Calvin and Hobbes- {current_date_str}')
-fe.link(href=CALVINANDHOBBES_URL)
-fe.pubDate(current_date)
-fe.description(f'<img src="{image_url}" alt="Calvin and Hobbes Strip voor {current_date_str}" />')
+fe.title(f'Calvin and Hobbes - {datum_titel}')
+fe.link(href=comic_link)
+fe.pubDate(nu)
+fe.description(f'<img src="{image_url}" alt="Calvin and Hobbes Strip voor {datum_titel}" />')
+
+# --- Stap 3: Schrijf het XML-bestand weg ---
 
 try:
     fg.rss_file('calvinandhobbes.xml', pretty=True)

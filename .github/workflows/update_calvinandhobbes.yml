@@ -24,8 +24,9 @@ jobs:
           # Gebruik een specifieke versie voor consistentie
           python-version: '3.11'
       
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
+      # DEZE STAP IS VERWIJDERD
+      # - name: Set up Chrome
+      #   uses: browser-actions/setup-chrome@v1
 
       - name: Install dependencies
         run: |
