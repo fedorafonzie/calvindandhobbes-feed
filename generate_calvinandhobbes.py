@@ -1,80 +1,95 @@
 import requests
+import json
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
-print("Script gestart: Ophalen van klassieke C&H strip via de dag-pagina.")
+print("Script gestart: Ophalen van de dagelijkse Calvin and Hobbes strip.")
 
-# --- Stap 1: Bepaal welke klassieke strip we vandaag ophalen ---
+# URL van de Calvin and HObbes comic pagina
+CALVINANDHOBBES_URL = 'https://www.gocomics.com/calvinandhobbes'
 
-# De strip liep van 18 november 1985 tot 31 december 1995.
-start_datum_strip = datetime(1985, 11, 18)
-eind_datum_strip = datetime(1995, 12, 31)
-totaal_dagen_strip = (eind_datum_strip - start_datum_strip).days + 1
-
-# We gebruiken een vast startpunt om de cyclus voorspelbaar te maken.
-start_punt_cyclus = datetime(2020, 1, 1)
-vandaag = datetime.now()
-dagen_verstreken = (vandaag - start_punt_cyclus).days
-
-# Bereken welke dag in de strip-cyclus het vandaag is.
-cyclus_dag_index = dagen_verstreken % totaal_dagen_strip
-huidige_strip_datum = start_datum_strip + timedelta(days=cyclus_dag_index)
-
-# Formatteer de datum voor de URL van de GoComics pagina
-jaar = huidige_strip_datum.strftime('%Y')
-maand = huidige_strip_datum.strftime('%m')
-dag = huidige_strip_datum.strftime('%d')
-
-comic_page_url = f"https://www.gocomics.com/calvinandhobbes/{jaar}/{maand}/{dag}"
-image_url = None
-
-# --- Stap 2: Haal de pagina op en extraheer de image URL ---
-
+# Stap 1: Haal de webpagina op
 try:
-    print(f"Pagina ophalen: {comic_page_url}")
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'}
-    response = requests.get(comic_page_url, headers=headers)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+    }
+    response = requests.get(CALVINANDHOBBES_URL, headers=headers)
     response.raise_for_status()
-
-    # Gebruik BeautifulSoup om de HTML te parsen
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
-    # Zoek naar de picture-tag met de class 'item-asset-image' en haal de src van de img-tag eruit
-    picture_tag = soup.find('picture', class_='item-asset-image')
-    if picture_tag:
-        img_tag = picture_tag.find('img')
-        if img_tag and img_tag.has_attr('src'):
-            image_url = img_tag['src']
-            print(f"SUCCES: Afbeelding URL gevonden: {image_url}")
-        else:
-             print("FOUT: Kon de <img> tag of de 'src' attributie niet vinden.")
-             exit(1)
-    else:
-        print("FOUT: Kon de <picture> tag met class 'item-asset-image' niet vinden.")
-        exit(1)
-
+    print("SUCCES: GoComics pagina HTML opgehaald.")
 except requests.exceptions.RequestException as e:
-    print(f"FOUT: Kon de GoComics pagina niet bereiken. Fout: {e}")
+    print(f"FOUT: Kon GoComics pagina niet ophalen. Fout: {e}")
     exit(1)
 
-# --- Stap 3: Bouw en schrijf de RSS-feed ---
+# --- DEFINITIEVE METHODE V3: Filteren van 'favorieten' ---
+print("Zoeken naar de correcte JSON-LD script tag en filteren van favorieten...")
 
+image_url = None
+try:
+    soup = BeautifulSoup(response.text, 'lxml')
+
+    # Vind ALLE script tags van het type 'application/ld+json'
+    all_json_ld_scripts = soup.find_all('script', type='application/ld+json')
+
+    if not all_json_ld_scripts:
+        raise ValueError("Geen 'application/ld+json' script tags gevonden op de pagina.")
+
+    for script in all_json_ld_scripts:
+        if script.string:
+            try:
+                data = json.loads(script.string)
+
+                # Controleer of dit een valide 'ImageObject' is dat de pagina representeert
+                if (isinstance(data, dict) and
+                        data.get('@type') == 'ImageObject' and
+                        data.get('representativeOfPage') is True and
+                        'url' in data):
+                    
+                    # --- DE CRUCIALE EXTRA CONTROLE ---
+                    # Zoek "omhoog" vanaf het script om te zien of het in de 'FiveFavorites' sectie zit.
+                    if script.find_parent('section', class_='ShowFiveFavorites_showFiveFavorites__zsqHu'):
+                        # Ja, dit is een favoriet. Negeer deze en ga door naar de volgende in de loop.
+                        print(f"INFO: 'Favoriet' afbeelding genegeerd: ...{data['url'][-20:]}")
+                        continue
+                    
+                    # Als de code hier komt, is het GEEN favoriet. Dit is de hoofdafbeelding.
+                    image_url = data['url']
+                    print(f"SUCCES: Hoofdafbeelding gevonden: {image_url}")
+                    break  # Stop de loop, we zijn klaar.
+
+            except (json.JSONDecodeError, AttributeError):
+                continue
+    
+    if not image_url:
+        raise ValueError("Kon de hoofdafbeelding niet isoleren van de favorieten.")
+
+except (ValueError, KeyError, TypeError) as e:
+    print(f"FOUT: Kon de URL niet uit de data halen. Het script is mogelijk verouderd.")
+    print(f"Foutdetails: {e}")
+    with open("debug_gocomics.html", "w", encoding="utf-8") as f:
+        f.write(response.text)
+    print("De ontvangen HTML is opgeslagen in 'debug_gocomics.html' voor analyse.")
+    exit(1)
+# --- EINDE DEFINITIEVE METHODE ---
+    
+# De rest van het script blijft ongewijzigd
+# ... (Stap 3 & 4) ...
 fg = FeedGenerator()
-fg.id(comic_page_url)
-fg.title('Calvin and Hobbes Strip')
-fg.link(href='https://www.gocomics.com/calvinandhobbes', rel='alternate')
-fg.description('Een dagelijkse klassieke Calvin and Hobbes strip.')
+fg.id(CALVINANDHOBBES_URL)
+fg.title('Calvin and Hobbes Comic Strip')
+fg.link(href=CALVINANDHOBBES_URL, rel='alternate')
+fg.description('De dagelijkse Calvin and Hobbes strip.')
 fg.language('en')
 
-datum_titel = huidige_strip_datum.strftime("%Y-%m-%d")
+current_date = datetime.now(timezone.utc)
+current_date_str = current_date.strftime("%Y-%m-%d")
 
 fe = fg.add_entry()
 fe.id(image_url)
-fe.title(f'Calvin and Hobbes - {datum_titel}')
-fe.link(href=comic_page_url)
-fe.pubDate(vandaag.replace(hour=8, minute=0, second=0, microsecond=0).astimezone(timezone.utc))
-fe.description(f'<img src="{image_url}" alt="Calvin and Hobbes Strip voor {datum_titel}" />')
+fe.title(f'Calvin and Hobbes - {current_date_str}')
+fe.link(href=CALVINANDHOBBES_URL)
+fe.pubDate(current_date)
+fe.description(f'<img src="{image_url}" alt="Calvin and Hobbes Strip voor {current_date_str}" />')
 
 try:
     fg.rss_file('calvinandhobbes.xml', pretty=True)
