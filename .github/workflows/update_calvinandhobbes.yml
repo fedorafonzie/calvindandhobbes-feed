@@ -28,7 +28,7 @@ jobs:
           pip install requests beautifulsoup4 feedgen
 
       - name: Run Python script to generate feed
-        run: python generate_darksideofthehorse.py
+        run: python generate_calvinandhobbes.py
 
       - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
