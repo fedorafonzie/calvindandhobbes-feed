@@ -1,4 +1,4 @@
-name: Generate and Deploy Calvind and Hobbes Feed
+name: Generate and Deploy Calvin and Hobbes Feed
 
 on:
   schedule:
