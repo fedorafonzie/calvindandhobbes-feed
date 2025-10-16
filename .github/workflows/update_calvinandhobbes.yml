@@ -1,4 +1,4 @@
-name: Generate and Deploy Dark Side of the Horse Feed
+name: Generate and Deploy Calvind and Hobbes Feed
 
 on:
   schedule:
